@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="theme-color" content="#1E4076">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <title>اختبار السيارات عمومي — YAM</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-questions="red_questions.json">
+  <main class="page">
+    <section class="card">
+
+      <!-- QUIZ VIEW -->
+      <div id="quizView">
+        <div class="header">
+          <div class="quiz-topbar">
+            <a id="backBtn" class="back-btn home-link" href="index.html" aria-label="الرجوع للصفحة الرئيسية">
+              <svg class="back-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>رجوع</span>
+            </a>
+
+            <a class="quiz-brand home-link" href="index.html" aria-label="الصفحة الرئيسية">
+              <img src="assets/logo-mark.svg" alt="YAM">
+            </a>
+          </div>
+
+          <h1 class="title small">اختبار قيادة السيارات عمومي</h1>
+          <div id="userName" class="sub user-name"></div>
+          <div id="userPhone" class="sub user-phone"></div>
+        </div>
+
+        <div id="qCounterTop" class="counter-top"></div>
+        <div id="progress" class="progress"></div>
+
+        <nav id="qNav" class="qnav" aria-label="التنقل بين الأسئلة"></nav>
+
+        <div class="qbox">
+          <img id="qImg" class="qimg hidden" alt="صورة السؤال" />
+          <div id="qText" class="question"></div>
+        </div>
+
+        <div id="choices" class="choices"></div>
+
+        <div id="feedback" class="feedback hidden"></div>
+
+        <div class="actions">
+          <button id="prevBtn" class="btn btn-secondary btn-nav" disabled>السابق</button>
+          <button id="confirmBtn" class="btn btn-primary" disabled>تأكيد الإجابة</button>
+          <button id="nextBtn" class="btn btn-secondary btn-nav">التالي</button>
+        </div>
+      </div>
+
+      <!-- RESULTS VIEW -->
+      <div id="resultsView" class="hidden">
+        <div class="header">
+          <h1 class="title small">النتيجة</h1>
+          <div id="resultUser" class="sub"></div>
+        </div>
+
+        <div id="scoreBox" class="score-box"></div>
+
+        <div class="results-actions">
+          <button id="retryBtn" class="btn btn-primary">إعادة اختبار (30 سؤال)</button>
+          <button id="homeBtn" class="btn btn-secondary">الرجوع للرئيسية</button>
+        </div>
+
+        <div id="reviewList" class="review-list"></div>
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var s = document.createElement("script");
+      s.src = "quiz.js?v=" + Date.now();
+      document.body.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
