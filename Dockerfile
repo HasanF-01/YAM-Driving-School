@@ -9,7 +9,7 @@ ENV NODE_ENV=production \
     PORT=8777
 
 # ملفات التشغيل فقط — أدوات الفحص و .github مستثناة في .dockerignore
-COPY serve.js quiz.js style.css ./
+COPY serve.js quiz.js exam-client.js style.css ./
 COPY *.html ./
 COPY *.json ./
 COPY assets ./assets

@@ -13,6 +13,10 @@ const PORT = process.env.PORT || 8777;
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 
+// YAM_STATIC=1 يحاكي GitHub Pages: لا وجود لـ /api، وبنوك الأسئلة تُنزَّل كملفات.
+// للمعاينة المحلية للنسخة المنشورة فقط — لا تشغّل الخادم هكذا للاستعمال العادي.
+const STATIC_MODE = /^(1|true|yes|on)$/i.test(String(process.env.YAM_STATIC || ''));
+
 const TAKE_COUNT = 30; // عدد الأسئلة في كل اختبار
 const PASS_MARK = 24;  // 24 / 30 للنجاح
 
@@ -274,7 +278,8 @@ function serveStatic(req, res, urlPath) {
   const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
 
   // بنوك الأسئلة لا تُنزَّل أبداً — الوصول إليها عبر /api فقط
-  if (BANKS.includes(rel)) {
+  // (إلا في وضع المحاكاة، حيث لا يوجد /api أصلاً)
+  if (!STATIC_MODE && BANKS.includes(rel)) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end('403 Forbidden');
     return;
   }
@@ -304,11 +309,16 @@ http.createServer((req, res) => {
   const urlPath = decodeURIComponent(req.url.split('?')[0]);
 
   if (urlPath.startsWith('/api/')) {
+    // نفس ما يفعله GitHub Pages: صفحة 404 عادية، وليست جواباً بصيغة JSON
+    if (STATIC_MODE) {
+      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }).end('<h1>404 Not Found</h1>');
+      return;
+    }
     handleApi(req, res, urlPath);
     return;
   }
 
   serveStatic(req, res, urlPath);
 }).listen(PORT, HOST, () => {
-  console.log(`YAM → http://localhost:${PORT}`);
+  console.log(`YAM → http://localhost:${PORT}${STATIC_MODE ? '  [static — GitHub Pages simulation]' : ''}`);
 });

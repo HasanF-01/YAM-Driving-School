@@ -2,20 +2,14 @@
 // Random 30 questions + confirm answer + free navigation + end-of-exam review (Arabic UI)
 // Each page names its question bank on <body data-questions="...">
 //
-// The bank files are never downloaded by the browser: the server deals the exam,
-// hands over one correct answer per confirmed question, and releases the full
-// answer key only when the exam is finished.
+// This file is the interface only. Dealing the exam and marking the answers is
+// exam-client.js, which talks to the server when there is one and runs the same
+// rules in the browser when there is not (GitHub Pages). Load it first.
 
 const BRAND_NAME = "يوسف أحمد الموسوي";
 const BRAND_PHONE = "03 450 763 - 76 058 603";
 
-// Relative on purpose, so the app also works when hosted under a sub-path
-const API_START = "api/exam/start";
-const API_ANSWER = "api/exam/answer";
-const API_FINISH = "api/exam/finish";
-
 let quiz = {
-  examId: null,
   list: [],         // questions WITHOUT the correct answer
   index: 0,
   score: 0,
@@ -34,25 +28,10 @@ function dataFile() {
   return f && f.trim() !== "" ? f.trim() : "questions.json";
 }
 
-async function postJson(url, payload) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-
-  let data = null;
-  try {
-    data = await res.json();
-  } catch (_) {
-    /* handled right below */
-  }
-
-  if (!res.ok || !data) {
-    throw new Error((data && data.error) || `تعذّر الاتصال بالخادم (${res.status})`);
-  }
-  return data;
+// exam-client.js is loaded just before this file; without it there is no exam
+function exam() {
+  if (!window.ExamClient) throw new Error("تعذّر تحميل ملفات الاختبار، أعد تحميل الصفحة");
+  return window.ExamClient;
 }
 
 function setButtonEnabled(btn, enabled) {
@@ -317,8 +296,8 @@ function updateActionButtons() {
   setPrimary(nextBtn, quiz.locked);
 }
 
-// The correct answer lives on the server: ask for it, one question at a time,
-// and only once the user has committed to a choice.
+// Ask for the correct answer one question at a time, and only once the user has
+// committed to a choice — on the server when there is one, locally otherwise.
 async function revealAnswer() {
   if (quiz.locked || quiz.busy) return;
 
@@ -331,11 +310,7 @@ async function revealAnswer() {
 
   let record;
   try {
-    const data = await postJson(API_ANSWER, {
-      examId: quiz.examId,
-      index: at,
-      chosenIndex: chosen,
-    });
+    const data = await exam().answer(at, chosen);
     record = { chosenIndex: data.chosenIndex, correctIndex: data.correctIndex };
   } catch (err) {
     quiz.busy = false;
@@ -412,7 +387,7 @@ async function showResults() {
   quiz.busy = true;
   let final;
   try {
-    final = await postJson(API_FINISH, { examId: quiz.examId });
+    final = await exam().finish();
   } finally {
     quiz.busy = false;
   }
@@ -506,11 +481,10 @@ async function showResults() {
    Boot
 --------------------------------------------------- */
 
-// The server draws the 30 questions and keeps their answers
+// Draws the 30 questions; the answers are not part of what comes back
 async function dealNewList() {
-  const data = await postJson(API_START, { bank: dataFile() });
+  const data = await exam().start(dataFile());
 
-  quiz.examId = data.examId;
   quiz.list = data.questions;
   quiz.index = 0;
   quiz.score = 0;

@@ -14,3 +14,6 @@ $RECYCLE.BIN/
 
 # Logs
 *.log
+
+# Build output (scripts/build-pages.js) — GitHub Actions rebuilds it
+_site/

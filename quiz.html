@@ -83,11 +83,16 @@
   </main>
 
   <script>
-    // Always load the latest quiz.js (Samsung Internet caching fix)
+    // Always load the latest scripts (Samsung Internet caching fix).
+    // async=false keeps them in order: the exam engine before the interface.
     (function () {
-      var s = document.createElement("script");
-      s.src = "quiz.js?v=" + Date.now();
-      document.body.appendChild(s);
+      var v = "?v=" + Date.now();
+      ["exam-client.js", "quiz.js"].forEach(function (src) {
+        var s = document.createElement("script");
+        s.src = src + v;
+        s.async = false;
+        document.body.appendChild(s);
+      });
     })();
   </script>
 </body>
