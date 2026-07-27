@@ -134,15 +134,39 @@ async function checkHosting(banks) {
 
 /* --------------------------------------------- exam-client.js under Node */
 
-// A fresh copy each time: the mode is decided once per load, on purpose
-function loadExamClient() {
+// A fresh copy each time: the mode is decided once per load, on purpose.
+// `remembered` seeds the sessionStorage the browser would have kept.
+function loadExamClient(remembered) {
   delete require.cache[require.resolve(CLIENT)];
   delete globalThis.ExamClient;
+
+  const store = new Map();
+  if (remembered) store.set('yam.examMode', remembered);
+  globalThis.sessionStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
 
   globalThis.fetch = (url, opts) => nodeFetch(new URL(String(url), `${baseUrl}/`), opts);
   require(CLIENT);
 
   return globalThis.ExamClient;
+}
+
+async function checkStaleServerMemory() {
+  section('A stale server memory recovers to static mode');
+
+  // Same origin, served differently than last time: the browser remembers an
+  // API that is no longer there. The exam must still start.
+  const client = loadExamClient('server');
+  const started = await client.start('questions.json');
+
+  check(
+    'falls back despite the remembered mode',
+    client.mode === 'static' && (started.questions || []).length === client.TAKE_COUNT,
+    `mode ${client.mode}`
+  );
 }
 
 async function checkLocalExam(bank) {
@@ -228,6 +252,16 @@ async function checkServerModeWins() {
       message = e.message;
     }
     check('a rejected bank is reported, not worked around', message !== '', message);
+
+    // Same origin, served differently than last time: the remembered mode says
+    // static, but the banks are 403 here. The exam must still start.
+    const stale = loadExamClient('static');
+    const recovered = await stale.start('questions.json');
+    check(
+      'a stale static memory recovers to server mode',
+      stale.mode === 'server' && (recovered.questions || []).length === stale.TAKE_COUNT,
+      `mode ${stale.mode}`
+    );
   } finally {
     server.kill();
   }
@@ -250,6 +284,7 @@ async function checkServerModeWins() {
   try {
     await waitForServer(baseUrl);
     await checkHosting(banks);
+    await checkStaleServerMemory();
     for (const bank of banks) await checkLocalExam(bank);
   } catch (e) {
     check('static run', false, e.message);

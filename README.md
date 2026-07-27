@@ -170,7 +170,7 @@ node scripts/smoke.js
 بعدها كل `push` ناجح على `main` ينشر الموقع تلقائياً:
 
 ```
-https://hasanf-01.github.io/<اسم-المستودع>/
+https://hasanf-01.github.io/YAM-Driving-School/
 ```
 
 ما ينشره هو مجلّد `_site` الذي يبنيه `scripts/build-pages.js` — الصفحات والأسئلة

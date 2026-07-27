@@ -27,6 +27,7 @@
   const MODE_KEY = 'yam.examMode';
 
   let mode = 'unknown'; // 'unknown' | 'server' | 'static'
+  let confirmed = false; // a server call has actually succeeded in this page load
   let examId = null;
 
   /* ---------------------------------------------------
@@ -48,6 +49,15 @@
       if (root.sessionStorage) root.sessionStorage.setItem(MODE_KEY, next);
     } catch (_) {
       /* not worth failing the exam over */
+    }
+  }
+
+  function forgetMode() {
+    mode = 'unknown';
+    try {
+      if (root.sessionStorage) root.sessionStorage.removeItem(MODE_KEY);
+    } catch (_) {
+      /* same */
     }
   }
 
@@ -228,23 +238,36 @@
   --------------------------------------------------- */
 
   async function start(bank) {
-    if (mode === 'unknown') mode = rememberedMode();
+    // A remembered mode is a hint that saves the probe, not a commitment: the
+    // same origin can be served differently than it was last time.
+    const remembered = mode === 'unknown' ? rememberedMode() : mode;
+    mode = remembered;
 
     if (mode !== 'static') {
       try {
         const data = await postJson(API_START, { bank });
         setMode('server');
+        confirmed = true;
         examId = data.examId;
         return data;
       } catch (err) {
-        // A settled server mode reports its errors; only the probe may give up
-        if (mode === 'server' || !err || !err.yamNoApi) throw err;
+        // Once a server has answered, its errors are reported as they are.
+        // Before that — probe or remembered hint — a silent API means static.
+        if (confirmed || !err || !err.yamNoApi) throw err;
         setMode('static');
       }
     }
 
     examId = null;
-    return localStart(bank);
+    try {
+      return await localStart(bank);
+    } catch (err) {
+      // Remembered static, but the banks are not downloadable here after all
+      // (a server answers this origin now, and it keeps them to itself).
+      if (remembered !== 'static') throw err;
+      forgetMode();
+      return start(bank);
+    }
   }
 
   async function answer(index, chosenIndex) {
