@@ -1,45 +1,58 @@
 // quiz.js — shared quiz engine for YAM (Youssef Ahmad Moussawi)
 // Random 30 questions + confirm answer + free navigation + end-of-exam review (Arabic UI)
-// Each page sets its data file on <body data-questions="...">
+// Each page names its question bank on <body data-questions="...">
+//
+// The bank files are never downloaded by the browser: the server deals the exam,
+// hands over one correct answer per confirmed question, and releases the full
+// answer key only when the exam is finished.
 
 const BRAND_NAME = "يوسف أحمد الموسوي";
 const BRAND_PHONE = "03 450 763 - 76 058 603";
 
-const TAKE_COUNT = 30; // always a random 30 questions
-const PASS_MARK = 24;  // 24 / 30 to pass
+// Relative on purpose, so the app also works when hosted under a sub-path
+const API_START = "api/exam/start";
+const API_ANSWER = "api/exam/answer";
+const API_FINISH = "api/exam/finish";
 
-let QUESTIONS = [];
 let quiz = {
-  list: [],
+  examId: null,
+  list: [],         // questions WITHOUT the correct answer
   index: 0,
   score: 0,
+  passed: false,
   selected: null,   // selected index (original index in q.choices)
   locked: false,    // becomes true only AFTER confirm
-  answers: [],      // confirmed: { id, chosenIndex, correctIndex }
+  answers: [],      // confirmed: { chosenIndex, correctIndex }
   pending: [],      // per-question selection that was picked but not confirmed yet
+  busy: false,      // a request to the server is in flight
   _navItems: [],    // buttons of the question strip
   _lastNavAt: 0
 };
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 function dataFile() {
   const f = document.body.getAttribute("data-questions");
   return f && f.trim() !== "" ? f.trim() : "questions.json";
 }
 
-async function loadQuestions() {
-  const file = dataFile();
-  const res = await fetch(`${file}?v=${Date.now()}`, { cache: "no-store" });
-  if (!res.ok) throw new Error("تعذّر تحميل الأسئلة: " + file);
-  return await res.json();
+async function postJson(url, payload) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    /* handled right below */
+  }
+
+  if (!res.ok || !data) {
+    throw new Error((data && data.error) || `تعذّر الاتصال بالخادم (${res.status})`);
+  }
+  return data;
 }
 
 function setButtonEnabled(btn, enabled) {
@@ -97,12 +110,6 @@ function isCorrectAnswer(a) {
 
 function answeredCount() {
   return quiz.answers.filter(Boolean).length;
-}
-
-function computeScore() {
-  let s = 0;
-  quiz.answers.forEach((a) => { if (isCorrectAnswer(a)) s += 1; });
-  return s;
 }
 
 // Keep an unconfirmed pick so it is still there when the user comes back
@@ -310,18 +317,39 @@ function updateActionButtons() {
   setPrimary(nextBtn, quiz.locked);
 }
 
-function revealAnswer() {
-  if (quiz.locked) return;
+// The correct answer lives on the server: ask for it, one question at a time,
+// and only once the user has committed to a choice.
+async function revealAnswer() {
+  if (quiz.locked || quiz.busy) return;
 
-  const q = quiz.list[quiz.index];
+  const at = quiz.index;
   const chosen = quiz.selected;
   if (chosen === null) return;
 
-  const record = { id: q.id, chosenIndex: chosen, correctIndex: q.correctIndex };
-  quiz.answers[quiz.index] = record;
-  quiz.pending[quiz.index] = null;
+  quiz.busy = true;
+  setButtonEnabled(document.getElementById("confirmBtn"), false);
 
-  applyReveal(record);
+  let record;
+  try {
+    const data = await postJson(API_ANSWER, {
+      examId: quiz.examId,
+      index: at,
+      chosenIndex: chosen,
+    });
+    record = { chosenIndex: data.chosenIndex, correctIndex: data.correctIndex };
+  } catch (err) {
+    quiz.busy = false;
+    updateActionButtons(); // give the confirm button back
+    alert("خطأ: " + err.message);
+    return;
+  }
+  quiz.busy = false;
+
+  quiz.answers[at] = record;
+  quiz.pending[at] = null;
+
+  // The user may have moved on while the request was in flight
+  if (quiz.index === at) applyReveal(record);
 
   updateActionButtons();
   updateNav();
@@ -362,7 +390,7 @@ function nextQuestion() {
 }
 
 function finishExam() {
-  if (navThrottled()) return;
+  if (navThrottled() || quiz.busy) return;
 
   stashPending();
 
@@ -372,15 +400,28 @@ function finishExam() {
     if (!window.confirm(`لديك ${what} بدون إجابة. هل تريد إنهاء الاختبار وعرض النتيجة؟`)) return;
   }
 
-  showResults();
+  showResults().catch((err) => alert("خطأ: " + err.message));
 }
 
 /* ---------------------------------------------------
    Results
 --------------------------------------------------- */
 
-function showResults() {
-  quiz.score = computeScore();
+async function showResults() {
+  // Closing the exam is what releases the full answer key
+  quiz.busy = true;
+  let final;
+  try {
+    final = await postJson(API_FINISH, { examId: quiz.examId });
+  } finally {
+    quiz.busy = false;
+  }
+
+  quiz.score = final.score;
+  quiz.passed = final.passed;
+  quiz.answers = final.results.map((r) =>
+    r.chosenIndex === null ? null : { chosenIndex: r.chosenIndex, correctIndex: r.correctIndex }
+  );
 
   document.getElementById("quizView").classList.add("hidden");
   document.getElementById("resultsView").classList.remove("hidden");
@@ -397,7 +438,7 @@ function showResults() {
   phoneSpan.textContent = BRAND_PHONE;
   resultUser.appendChild(phoneSpan);
 
-  const passed = quiz.score >= PASS_MARK;
+  const passed = quiz.passed;
 
   document.getElementById("scoreBox").innerHTML = `
     <div class="score-title">علامتك</div>
@@ -411,7 +452,7 @@ function showResults() {
   review.innerHTML = "";
 
   quiz.list.forEach((q, i) => {
-    const a = quiz.answers[i] || { chosenIndex: null, correctIndex: q.correctIndex };
+    const a = final.results[i] || { chosenIndex: null, correctIndex: null };
 
     const chosenText =
       (a.chosenIndex !== null && q.choices[a.chosenIndex] !== undefined)
@@ -465,10 +506,15 @@ function showResults() {
    Boot
 --------------------------------------------------- */
 
-function dealNewList() {
-  quiz.list = shuffle(QUESTIONS).slice(0, Math.min(TAKE_COUNT, QUESTIONS.length));
+// The server draws the 30 questions and keeps their answers
+async function dealNewList() {
+  const data = await postJson(API_START, { bank: dataFile() });
+
+  quiz.examId = data.examId;
+  quiz.list = data.questions;
   quiz.index = 0;
   quiz.score = 0;
+  quiz.passed = false;
   quiz.selected = null;
   quiz.locked = false;
   quiz.answers = [];
@@ -479,8 +525,18 @@ function dealNewList() {
   buildNav();
 }
 
-function startNewExam() {
-  dealNewList();
+async function startNewExam() {
+  if (quiz.busy) return;
+
+  quiz.busy = true;
+  try {
+    await dealNewList();
+  } catch (err) {
+    alert("خطأ: " + err.message);
+    return;
+  } finally {
+    quiz.busy = false;
+  }
 
   document.getElementById("resultsView").classList.add("hidden");
   document.getElementById("quizView").classList.remove("hidden");
@@ -493,9 +549,7 @@ async function init() {
   document.getElementById("userName").textContent = BRAND_NAME;
   document.getElementById("userPhone").textContent = BRAND_PHONE;
 
-  QUESTIONS = await loadQuestions();
-
-  dealNewList();
+  await dealNewList();
 
   bindTap(document.getElementById("prevBtn"), prevQuestion);
   bindTap(document.getElementById("confirmBtn"), revealAnswer);

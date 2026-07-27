@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push on the same branch makes the running check obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Validate (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Syntax check
+        run: |
+          node --check quiz.js
+          node --check serve.js
+          node --check scripts/validate.js
+          node --check scripts/smoke.js
+
+      - name: Validate questions and links
+        run: node scripts/validate.js
+
+      - name: Smoke test the exam API
+        run: node scripts/smoke.js
+
+  publish:
+    name: Publish image to GHCR
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read    # job-level permissions replace the top-level block
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Lowercases the image name for us — GHCR rejects uppercase repo names.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: yam:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Verify the artifact that is about to be published, not just the source.
+      - name: Test the built image
+        run: |
+          docker run -d --name yam -p 8777:8777 yam:test
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8777/ > /dev/null && break
+            sleep 1
+          done
+
+          echo "--- landing page"
+          curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8777/ | grep -qx 200
+
+          echo "--- question banks must stay private"
+          for bank in questions.json car_questions.json red_questions.json; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8777/$bank")
+            test "$code" = "403" || { echo "$bank returned $code, expected 403"; exit 1; }
+          done
+
+          echo "--- exam starts and leaks no answers"
+          body=$(curl -fsS -X POST http://127.0.0.1:8777/api/exam/start \
+                   -H 'Content-Type: application/json' \
+                   -d '{"bank":"questions.json"}')
+          echo "$body" | node -e "
+            const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            if (d.questions.length !== d.total) throw new Error('wrong question count');
+            if (d.questions.some(q => 'correctIndex' in q)) throw new Error('answer key leaked');
+            console.log('ok — ' + d.total + ' questions, no answers');
+          "
+
+          docker rm -f yam
+
+      - name: Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
