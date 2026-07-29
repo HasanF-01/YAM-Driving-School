@@ -28,6 +28,61 @@ function dataFile() {
   return f && f.trim() !== "" ? f.trim() : "questions.json";
 }
 
+function el(id) {
+  return document.getElementById(id);
+}
+
+/* ---------------------------------------------------
+   Screen states — loading / error / the exam itself
+
+   Dealing the questions takes a round trip, so the card shows a spinner
+   instead of an empty box, and a failure lands on a panel with a retry
+   button rather than a browser alert the user cannot act on.
+--------------------------------------------------- */
+
+function showScreen(name) {
+  const screens = {
+    loading: el("loadingState"),
+    error: el("errorState"),
+    quiz: el("quizView"),
+    results: el("resultsView"),
+  };
+
+  Object.keys(screens).forEach((key) => {
+    if (screens[key]) screens[key].classList.toggle("hidden", key !== name);
+  });
+}
+
+function showLoadError(message) {
+  const text = el("errorText");
+  if (text) text.textContent = message;
+  showScreen("error");
+}
+
+// Announced by the screen reader, and used for the messages that are worth
+// seeing but not worth blocking on
+function announce(message) {
+  const status = el("srStatus");
+  if (status) status.textContent = message;
+}
+
+let toastTimer = null;
+
+function toast(message) {
+  announce(message);
+
+  let box = document.querySelector(".quiz-toast");
+  if (!box) {
+    box = document.createElement("div");
+    box.className = "quiz-toast";
+    document.body.appendChild(box);
+  }
+  box.textContent = message;
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.remove(), 4000);
+}
+
 // exam-client.js is loaded just before this file; without it there is no exam
 function exam() {
   if (!window.ExamClient) throw new Error("تعذّر تحميل ملفات الاختبار، أعد تحميل الصفحة");
@@ -250,6 +305,9 @@ function renderQuestion() {
   updateActionButtons();
   updateNav();
   setProgress();
+
+  const spoken = (q && q.question ? String(q.question).trim() : "") || "سؤال بصورة";
+  announce(`السؤال ${quiz.index + 1} من ${quiz.list.length}: ${spoken}`);
 }
 
 // Paint the correct / wrong colors and freeze the choices
@@ -315,7 +373,7 @@ async function revealAnswer() {
   } catch (err) {
     quiz.busy = false;
     updateActionButtons(); // give the confirm button back
-    alert("خطأ: " + err.message);
+    toast(err.message);
     return;
   }
   quiz.busy = false;
@@ -329,6 +387,14 @@ async function revealAnswer() {
   updateActionButtons();
   updateNav();
   setProgress();
+
+  const choices = (quiz.list[at] || {}).choices || [];
+  const right = choices[record.correctIndex];
+  announce(
+    isCorrectAnswer(record)
+      ? "إجابة صحيحة"
+      : `إجابة خاطئة. الإجابة الصحيحة: ${right !== undefined ? right : "غير متوفرة"}`
+  );
 }
 
 /* ---------------------------------------------------
@@ -375,7 +441,7 @@ function finishExam() {
     if (!window.confirm(`لديك ${what} بدون إجابة. هل تريد إنهاء الاختبار وعرض النتيجة؟`)) return;
   }
 
-  showResults().catch((err) => alert("خطأ: " + err.message));
+  showResults().catch((err) => toast(err.message));
 }
 
 /* ---------------------------------------------------
@@ -398,9 +464,9 @@ async function showResults() {
     r.chosenIndex === null ? null : { chosenIndex: r.chosenIndex, correctIndex: r.correctIndex }
   );
 
-  document.getElementById("quizView").classList.add("hidden");
-  document.getElementById("resultsView").classList.remove("hidden");
+  showScreen("results");
   window.scrollTo({ top: 0, behavior: "smooth" });
+  announce(`انتهى الاختبار. علامتك ${final.score} من ${quiz.list.length}، ${final.passed ? "ناجح" : "راسب"}`);
 
   // Keep the phone digits in their own LTR run, otherwise RTL reorders the groups
   const resultUser = document.getElementById("resultUser");
@@ -503,48 +569,89 @@ async function startNewExam() {
   if (quiz.busy) return;
 
   quiz.busy = true;
+  showScreen("loading");
   try {
     await dealNewList();
   } catch (err) {
-    alert("خطأ: " + err.message);
+    showLoadError(err.message);
     return;
   } finally {
     quiz.busy = false;
   }
 
-  document.getElementById("resultsView").classList.add("hidden");
-  document.getElementById("quizView").classList.remove("hidden");
+  showScreen("quiz");
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   renderQuestion();
 }
 
+// Desktop shortcuts: a number picks a choice, Enter confirms then moves on,
+// the arrows walk the paper (RTL: right goes back, left goes forward).
+function onKeyDown(e) {
+  if (el("quizView").classList.contains("hidden")) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+  const tag = (e.target && e.target.tagName ? e.target.tagName : "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+
+  if (e.key === "ArrowRight") {
+    e.preventDefault();
+    goTo(quiz.index - 1);
+    return;
+  }
+
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    goTo(quiz.index + 1);
+    return;
+  }
+
+  if (e.key === "Enter") {
+    // Enter on a focused button is that button's own job, not a shortcut
+    if (tag === "button" || tag === "a") return;
+    e.preventDefault();
+    if (!quiz.locked && quiz.selected !== null) revealAnswer();
+    else nextQuestion();
+    return;
+  }
+
+  const n = Number(e.key);
+  if (!Number.isInteger(n) || n < 1 || n > 9) return;
+  if (quiz.locked) return;
+
+  const choices = [...document.getElementById("choices").querySelectorAll(".choice")];
+  const target = choices[n - 1];
+  if (!target) return;
+
+  e.preventDefault();
+  choices.forEach((b) => b.classList.remove("selected"));
+  target.classList.add("selected");
+
+  quiz.selected = Number(target.dataset.index);
+  quiz.pending[quiz.index] = quiz.selected;
+
+  updateActionButtons();
+  updateNav();
+  announce(`اخترت: ${target.textContent}`);
+}
+
 async function init() {
-  document.getElementById("userName").textContent = BRAND_NAME;
-  document.getElementById("userPhone").textContent = BRAND_PHONE;
+  el("userName").textContent = BRAND_NAME;
+  el("userPhone").textContent = BRAND_PHONE;
 
-  await dealNewList();
+  // Bound before the questions are dealt, so the retry button on the error
+  // panel works even when this very load is what failed.
+  bindTap(el("prevBtn"), prevQuestion);
+  bindTap(el("confirmBtn"), revealAnswer);
+  bindTap(el("nextBtn"), nextQuestion);
+  bindTap(el("retryBtn"), startNewExam);
+  bindTap(el("retryLoadBtn"), startNewExam);
 
-  bindTap(document.getElementById("prevBtn"), prevQuestion);
-  bindTap(document.getElementById("confirmBtn"), revealAnswer);
-  bindTap(document.getElementById("nextBtn"), nextQuestion);
-  bindTap(document.getElementById("retryBtn"), startNewExam);
-
-  bindTap(document.getElementById("homeBtn"), () => {
+  bindTap(el("homeBtn"), () => {
     window.location.href = "index.html";
   });
 
-  // Arrow keys on desktop (RTL: right goes back, left goes forward)
-  document.addEventListener("keydown", (e) => {
-    if (document.getElementById("quizView").classList.contains("hidden")) return;
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      goTo(quiz.index - 1);
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      goTo(quiz.index + 1);
-    }
-  });
+  document.addEventListener("keydown", onKeyDown);
 
   // The top back button is easy to hit by mistake, so warn once the exam started.
   // Plain click (not bindTap) so the link still works if this script fails.
@@ -557,7 +664,11 @@ async function init() {
     });
   });
 
+  showScreen("loading");
+  await dealNewList();
+  showScreen("quiz");
+
   renderQuestion();
 }
 
-init().catch((err) => alert("خطأ: " + err.message));
+init().catch((err) => showLoadError(err.message));
