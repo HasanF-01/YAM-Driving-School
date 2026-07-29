@@ -1,0 +1,21 @@
+{
+  "name": "YAM — اختبار السوق النظري",
+  "short_name": "YAM اختبار السوق",
+  "description": "تدرّب مجاناً على اختبار السوق النظري في لبنان: دراجات نارية، سيارات خصوصي وعمومي.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF3F9",
+  "theme_color": "#1E4076",
+  "icons": [
+    {
+      "src": "assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

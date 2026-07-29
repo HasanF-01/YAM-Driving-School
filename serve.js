@@ -38,6 +38,9 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webp': 'image/webp',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 /* ---------------------------------------------------
@@ -274,6 +277,18 @@ async function handleApi(req, res, urlPath) {
    الملفات الساكنة
 --------------------------------------------------- */
 
+// نفس صفحة 404 التي يعرضها GitHub Pages، حتى يكون السلوك واحداً في الحالتين
+function sendNotFound(res) {
+  fs.readFile(path.join(ROOT, '404.html'), (err, page) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('404 Not Found');
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.end(page);
+  });
+}
+
 function serveStatic(req, res, urlPath) {
   const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
 
@@ -294,7 +309,7 @@ function serveStatic(req, res, urlPath) {
 
   fs.readFile(file, (err, data) => {
     if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('404 Not Found');
+      sendNotFound(res);
       return;
     }
     res.writeHead(200, {
