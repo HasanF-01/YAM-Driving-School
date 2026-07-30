@@ -14,6 +14,10 @@
   --navy-400:#4A80C4;
   --slate:#4A6E9C;      /* logo subtitle color */
 
+  /* WhatsApp green, deepened so it sits calmly next to the navy */
+  --wa-green:#0F7A3D;
+  --wa-green-dark:#0B6231;
+
   --bg:#EEF3F9;
   --card:#ffffff;
   --text:#0E1B2E;
@@ -184,10 +188,43 @@ button, .btn, .choice, a{
 .phone-pill .ico{font-size:15px; line-height:1;}
 
 .phone-pill.whatsapp{
+  background:var(--wa-green);
+  color:#fff;
+  border-color:var(--wa-green);
+}
+.phone-pill.whatsapp:hover{background:var(--wa-green-dark); border-color:var(--wa-green-dark);}
+.phone-pill .social-ico{width:18px; height:18px; flex:none;}
+
+.landing-socials{
+  margin-top:10px;
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+
+.social-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  direction:ltr;
+
+  padding:9px 16px;
+  border-radius:999px;
+  font-size:15px;
+  font-weight:900;
+  letter-spacing:.4px;
+
   background:#fff;
   color:var(--navy-700);
+  text-decoration:none;
+  border:2px solid #fff;
+  transition:.18s ease;
 }
-.phone-pill.whatsapp:hover{background:#EAF1FB;}
+.social-pill:hover{background:#EAF1FB; border-color:#EAF1FB; transform:translateY(-2px);}
+.social-pill .social-ico{width:18px; height:18px; flex:none;}
+.social-pill.tiktok .social-ico{color:#111;}
+.social-pill.instagram .social-ico{color:#C13584;}
 
 .landing-title{
   margin:26px 0 0;
@@ -489,8 +526,14 @@ button, .btn, .choice, a{
 }
 .cta-btn:hover{background:var(--navy-600); border-color:var(--navy-600); transform:translateY(-2px);}
 
-.cta-btn.whatsapp{background:#fff; color:var(--navy-700);}
-.cta-btn.whatsapp:hover{background:#EAF1FB;}
+.cta-btn.whatsapp{
+  gap:8px;
+  background:var(--wa-green);
+  color:#fff;
+  border-color:var(--wa-green);
+}
+.cta-btn.whatsapp:hover{background:var(--wa-green-dark); border-color:var(--wa-green-dark);}
+.cta-btn .social-ico{width:20px; height:20px; flex:none;}
 
 /* --- FAQ --- */
 .faq{margin:26px auto 0; max-width:760px; display:grid; gap:10px;}
@@ -1148,6 +1191,17 @@ a.btn{text-decoration:none;}
   text-decoration:none;
 }
 .quiz-info-links a:hover{background:#EAF1FB; border-color:var(--navy-400);}
+
+.quiz-info-links a.whatsapp{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  background:var(--wa-green);
+  color:#fff;
+  border-color:var(--wa-green);
+}
+.quiz-info-links a.whatsapp:hover{background:var(--wa-green-dark); border-color:var(--wa-green-dark);}
+.quiz-info-links a .social-ico{width:17px; height:17px; flex:none;}
 
 .noscript-note{
   width:min(760px, 100%);

@@ -86,6 +86,8 @@
 - ☎ 03 450 763
 - ☎ 76 058 603
 - WhatsApp → `https://wa.me/96176058603`
+- TikTok → `https://www.tiktok.com/@yam_76058603`
+- Instagram → `https://www.instagram.com/yam_services7`
 
 لتغييرها لاحقاً: عدّل `BRAND_NAME` و `BRAND_PHONE` في أعلى `quiz.js`، وروابط `tel:` في `index.html`.
 
