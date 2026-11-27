@@ -26,6 +26,11 @@ const FILES = [
   'quiz.html',
   'car_quiz.html',
   'red_quiz.html',
+  'driving-lessons.html',
+  'driving-license.html',
+  'vehicle-registration.html',
+  'car-insurance.html',
+  'plates-and-mechanic.html',
   '404.html',        // Pages serves this for any unknown path
   'site.webmanifest',
   'exam-client.js',
